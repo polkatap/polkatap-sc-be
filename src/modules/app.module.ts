@@ -14,11 +14,7 @@ import { PaymentModule } from './payment/payment.module';
 import { PriceModule } from './price/price.module';
 import { SocketModule } from './socket/socket.module';
 import { GridModule } from './grid/grid.module';
-import { SettlementModule } from './settlement/settlement.module';
-import { RiskModule } from './risk/risk.module';
 import { DistributionModule } from './distribution/distribution.module';
-import { StrategyModule } from './strategy/strategy.module';
-import { WorkerModule } from './worker/worker.module';
 
 @Module({
     imports: [
@@ -38,11 +34,7 @@ import { WorkerModule } from './worker/worker.module';
         PaymentModule,
         PriceModule,
         GridModule,
-        SettlementModule,
-        RiskModule,
         DistributionModule,
-        StrategyModule,
-        WorkerModule,
     ],
 })
 export class AppModule implements OnModuleInit {

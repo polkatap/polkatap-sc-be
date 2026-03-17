@@ -2,17 +2,16 @@
 
 Backend service for the Tapl platform, built with NestJS, TypeScript, and EVM integrations.
 
-This repository contains the application backend and worker processes that power:
+This repository contains the application backend that powers:
 - authentication and account flows
-- order, settlement, payment, and distribution logic
-- price, risk, and strategy modules
+- order, payment, and distribution logic
+- price and grid modules
 - socket-based realtime updates
 - blockchain-facing integrations via Ether.js and generated contract bindings
 
 ## Architecture Overview
 
 - The main NestJS app exposes APIs and coordinates business logic.
-- A dedicated worker process handles background and listener-style jobs.
 - PostgreSQL stores core relational data and migration-managed schemas.
 - Redis supports caching and queue-like runtime coordination.
 - MinIO provides object storage for backend assets and files.
@@ -27,10 +26,6 @@ flowchart LR
   B --> E[MinIO]
   B --> F[Kafka]
   B --> G[EVM RPC / Smart Contracts]
-  H[Worker Service] --> C
-  H --> D
-  H --> F
-  H --> G
   B --> I[Socket Gateway]
   I --> A
 ```
@@ -42,15 +37,11 @@ flowchart LR
 | `auth` | Authentication, authorization, and access control |
 | `account` | User account management |
 | `order` | Order lifecycle handling |
-| `settlement` | Settlement processing and related jobs |
 | `payment` | Payment-related business flows |
 | `distribution` | Distribution and allocation flows |
 | `price` | Price ingestion and processing |
-| `risk` | Risk checks and policy logic |
-| `strategy` | Strategy configuration and execution support |
+| `grid` | Grid configuration and management |
 | `socket` | Realtime communication |
-| `worker` | Background processing and listeners |
-
 ## Repository Structure
 
 ```text
@@ -91,7 +82,6 @@ Ensure you have the following environment files in place:
 ```env
 NODE_ENV=production # local development production
 PORT='3001' # app port
-WORKER_PORT='3002' # listener port
 NETWORK=mainnet # testnet mainnet
 
 # postgres config
@@ -188,12 +178,6 @@ yarn migration:up
 To start the main application, run:
 ```sh
 yarn dev
-```
-
-### Step 7: Start the Worker Service
-To start the worker service, run:
-```sh
-yarn dev:worker
 ```
 
 ## Notes

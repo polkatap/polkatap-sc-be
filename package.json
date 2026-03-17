@@ -8,10 +8,8 @@
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main.js",
-    "start:worker": "node dist/worker.js",
     "dev": "nest start --watch --type-check",
     "dev:other": "npx ts-node-dev  -r tsconfig-paths/register src/main.ts",
-    "dev:worker": "nest start --watch --entryFile worker",
     "start:debug": "nest start --debug --watch",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "vitest",
@@ -22,7 +20,6 @@
     "migration:down": "npm run typeorm:cli -- -d src/libs/typeorm.config.ts migration:revert",
     "migration:clickhouse": "npx ts-node -r tsconfig-paths/register src/libs/click-house/clickhouse.migrator.ts",
     "typechain:gen": "typechain --target ethers-v6 --out-dir src/contracts src/abis/**/*.json",
-    "mock:settlement": "ts-node -r tsconfig-paths/register src/scripts/insert-mock-settlement-data.ts",
     "mock:balance": "ts-node -r tsconfig-paths/register src/scripts/insert-mock-balance-data.ts"
   },
   "dependencies": {

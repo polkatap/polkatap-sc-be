@@ -13,7 +13,6 @@ const envVarsSchema = Joi.object()
     NETWORK: Joi.string()
       .default('mainnet')
       .valid('mainnet', 'testnet', 'devnet'),
-    WORKER_PORT: Joi.number().default(3001),
 
     WAL_PATH: Joi.string().default('wal'),
     ACCOUNT_SHARD_COUNT: Joi.number().default(16),
@@ -60,7 +59,6 @@ if (error != null) {
 export const env = {
   env: envVars.NODE_ENV,
   port: envVars.PORT,
-  workerPort: envVars.WORKER_PORT,
   network: envVars.NETWORK,
   account: {
     walPath: envVars.WAL_PATH,
