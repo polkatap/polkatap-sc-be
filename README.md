@@ -1,6 +1,6 @@
-# Tapl Backend
+# PolkaTap Backend
 
-Backend service for the Tapl platform, built with NestJS, TypeScript, and EVM integrations.
+Backend service for the PolkaTap platform, built with NestJS, TypeScript, and EVM integrations.
 
 This repository contains the application backend that powers:
 - authentication and account flows
