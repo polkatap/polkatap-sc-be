@@ -1,192 +1,156 @@
 # PolkaTap Backend
 
-Backend service for the PolkaTap platform, built with NestJS, TypeScript, and EVM integrations.
+Backend service for PolkaTap, a real-time price-grid betting platform integrated with the Polkadot Hub blockchain.
 
-This repository contains the application backend that powers:
-- authentication and account flows
-- order, payment, and distribution logic
-- price and grid modules
-- socket-based realtime updates
-- blockchain-facing integrations via Ether.js and generated contract bindings
+This repository contains the offchain services that power pricing, grid generation, order execution, balance accounting, payment orchestration, and realtime delivery to clients. The onchain custody boundary is intentionally narrow and currently centered on [`smart-contracts/Vault.sol`](./smart-contracts/Vault.sol).
 
-## Architecture Overview
+## System Context
 
-- The main NestJS app exposes APIs and coordinates business logic.
-- PostgreSQL stores core relational data and migration-managed schemas.
-- Redis supports caching and queue-like runtime coordination.
-- MinIO provides object storage for backend assets and files.
-- Kafka supports event-driven flows when enabled.
-- EVM integrations connect the backend to BASE-compatible onchain infrastructure.
+PolkaTap keeps latency-sensitive gameplay offchain and uses Polkadot Hub as the settlement and custody boundary for deposits and withdrawals.
 
 ```mermaid
 flowchart LR
-  A[Client Apps] --> B[NestJS API]
-  B --> C[PostgreSQL]
-  B --> D[Redis]
-  B --> E[MinIO]
-  B --> F[Kafka]
-  B --> G[EVM RPC / Smart Contracts]
-  B --> I[Socket Gateway]
-  I --> A
+  FE[Frontend] -->|Place order| OM[Order Module]
+  FE <-->|WS updates| SG[Socket Gateway]
+
+  PF[External Price Feeds] --> PT[Price Tick Module]
+  PT --> GM[Grid Module]
+  GM --> SG
+  PT --> OM
+
+  OM -->|Economic events| AC[Account Module]
+
+  FE -->|Deposit / Withdraw| PM[Payment Module]
+  PM -->|Economic events| AC
+  PM <-->|Events / signed withdrawals| HUB[Polkadot Hub Vault]
+
+  AC --> PG[(PostgreSQL Ledger)]
+  AC --> WAL[WAL Files]
+  PT -. async persistence .-> CH[(ClickHouse)]
 ```
 
-## Backend Domains
+## Architecture Highlights
 
-| Domain | Responsibility |
+These highlights are distilled from the docs in [`system-design/`](./system-design/).
+
+### 1. Real-time price pipeline
+
+- The Price Tick module ingests exchange data, canonicalizes timestamps, fills gaps when needed, and fans out an ordered tick stream without blocking on persistence.
+- ClickHouse is used for historical price storage, while the realtime path stays in memory.
+
+Relevant docs:
+- [`system-design/overall.md`](./system-design/overall.md)
+- [`system-design/price_tick/price_tick_module.md`](./system-design/price_tick/price_tick_module.md)
+
+### 2. Signed grid generation
+
+- The Grid module converts each canonical price tick into a rolling price-time grid.
+- Every cell carries reward metadata and a backend signature so the frontend can submit cryptographically verifiable order intents.
+
+Relevant doc:
+- [`system-design/grid/grid_module.md`](./system-design/grid/grid_module.md)
+
+### 3. Low-latency order engine
+
+- Orders are validated on the hot path with duplicate prevention, cutoff checks, and token-bucket rate limiting.
+- Active orders live in memory and are bucketed by cell end-time for fast settlement and eviction.
+- Order processing emits economic events to the account system instead of mutating balances directly.
+
+Relevant doc:
+- [`system-design/orders/order_management.md`](./system-design/orders/order_management.md)
+
+### 4. Strongly consistent balance accounting
+
+- The Account module is the single writer for user balances.
+- Per-user serialization is achieved through shard queues.
+- WAL records intent durability, PostgreSQL ledger entries record economic facts, and in-memory balance state is treated as a rebuildable projection.
+
+Relevant docs:
+- [`system-design/accounts/account_balance_management.md`](./system-design/accounts/account_balance_management.md)
+- [`system-design/accounts/WAL_Ledger.md`](./system-design/accounts/WAL_Ledger.md)
+
+### 5. Payment bridge for Polkadot Hub
+
+- The Payment module bridges offchain balances with onchain deposit and withdrawal flows.
+- Deposits are driven by trusted onchain events from Polkadot Hub.
+- Withdrawals use session-based orchestration, signed approvals, idempotency keys, and account-layer locking to ensure correctness.
+
+Relevant doc:
+- [`system-design/payment/payment_module.md`](./system-design/payment/payment_module.md)
+
+## Modules In This Repo
+
+Core NestJS modules live under [`src/modules/`](./src/modules):
+
+| Module | Responsibility |
 |---|---|
-| `auth` | Authentication, authorization, and access control |
-| `account` | User account management |
-| `order` | Order lifecycle handling |
-| `payment` | Payment-related business flows |
-| `distribution` | Distribution and allocation flows |
-| `price` | Price ingestion and processing |
-| `grid` | Grid configuration and management |
-| `socket` | Realtime communication |
-## Repository Structure
+| `auth` | API auth, JWT, API key guards |
+| `socket` | Realtime websocket delivery |
+| `price` | Price ingestion, OHLC, tick distribution |
+| `grid` | Grid snapshot computation and signing |
+| `order` | Order placement, active-order lifecycle, settlement |
+| `account` | Balance state, WAL, ledger, shard queues |
+| `payment` | Deposit / withdraw orchestration with Polkadot Hub |
+| `distribution` | Distribution and downstream fund flow support |
+| `health-check` | Service health endpoints |
 
-```text
-.
-├── src/
-│   ├── adapters/
-│   ├── config/
-│   ├── libs/
-│   ├── migrations/
-│   ├── modules/
-│   ├── scripts/
-│   └── utils/
-├── system-design/
-├── benchmark-results/
-├── docker-compose.yml
-├── docker.env.example
-├── README.example.md
-└── README.md
+## Onchain Boundary
+
+The only contract surface that should be highlighted in this repository is:
+
+| File | Role |
+|---|---|
+| [`smart-contracts/Vault.sol`](./smart-contracts/Vault.sol) | PolkaTap custody vault for LP shares, trader deposits/claims, and solvency reporting used by the Polkadot Hub integration boundary |
+
+All other older contract descriptions have been intentionally omitted from this README because they are not the active focus of this backend repository.
+
+## Local Development
+
+### Prerequisites
+
+- Node.js
+- npm
+- Docker / Docker Compose
+
+### Infrastructure services
+
+The repo provides local containers for PostgreSQL, Redis, MinIO, Kafka, ZooKeeper, and ClickHouse:
+
+```bash
+cp docker.env.example docker.env
+docker compose up -d
 ```
 
-## Project Setup
+### Application setup
 
-This project is an EVM-based application utilizing Ether.js and integrating with BASE infrastructure. Below are the necessary steps to set up and run the project.
+1. Create `.env` with the variables required by [`src/config/index.ts`](./src/config/index.ts).
+2. Install dependencies.
+3. Start the backend.
 
-## Prerequisites
-
-Before setting up the project, ensure you have the following installed:
-- [Node.js](https://nodejs.org/) (Version 23.7.0 or later recommended)
-- [Yarn](https://yarnpkg.com/) (Package manager for dependencies)
-- [Docker](https://www.docker.com/) and Docker Compose
-- [TypeScript](https://www.typescriptlang.org/) (Installed globally)
-
-## Environment Variables
-
-Ensure you have the following environment files in place:
-
-### `.env` File
-```env
-NODE_ENV=production # local development production
-PORT='3001' # app port
-NETWORK=mainnet # testnet mainnet
-
-# postgres config
-POSTGRES_URL=postgres://root:1@localhost:5432/rwa
-
-# redis config
-REDIS_URL=redis://default:foobared@localhost:6379/0
-
-# minio config
-MINIO_ACCESS_KEY=development
-MINIO_SECRET_KEY=123456789
-BUCKET_NAME=development
-MINIO_HOST=localhost
-MINIO_PORT=32126
-
-# kafka config
-KAFKA_BROKER=localhost:39092
-KAFKA_TOPIC_PREFIX='local-rwa' # optional
-KAFKA_RUNNING_FLAG=true # true enable kafka and socket
-
-# rpc config
-RPC=
-
-JWT_SECRET=1
-
-APIFY_KEY=
-
-PRIVY_APP_ID=
-PRIVY_APP_SECRET=
-
-# admin private key
-ADMIN_PRIVATE_KEY=
+```bash
+npm install
+npm run dev
 ```
 
-### `docker.env` File
-```env
-POSTGRES_USER=root
-POSTGRES_PASSWORD=1
-POSTGRES_DB=viral_bot
-POSTGRES_PORT=5432
+The app starts with:
 
-REDIS_PASSWORD=foobared
-REDIS_PORT=6379
+- REST API under `/api`
+- Swagger in non-production at `/swagger`
+- WebSocket support via the socket module
 
-MINIO_ROOT_USER=development
-MINIO_ROOT_PASSWORD=123456789
-MINIO_PORT=32126
-MINIO_CONSOLE_PORT=9001
+## Useful Commands
 
-ZOOKEEPER_PORT=2181
-
-KAFKA_PORT=39092
-KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:39092
-
-CLICKHOUSE_DB=viral_bot
-CLICKHOUSE_USER=default
-CLICKHOUSE_PASSWORD=1
-CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
-CLICKHOUSE_PORT_HTTP=8123
-CLICKHOUSE_PORT_TCP=9000
-```
-## Running the Project
-
-### Step 1: Start Required Services with Docker Compose
-Ensure you have [Docker](https://www.docker.com/) installed. Run the following command to start the required services:
-```sh
-docker compose --env-file docker.env up -d
+```bash
+npm run dev
+npm run build
+npm run test
+npm run test:e2e
+npm run migration:up
 ```
 
-### Step 2: Install Dependencies
-Run the following command to install project dependencies:
-```sh
-yarn install
-```
+## References
 
-### Step 3: Generate TypeScript Bindings for Smart Contracts
-```sh
-yarn typechain:gen
-```
-
-### Step 4: Generate Migrations
-Run this command to generate database migrations:
-```sh
-yarn migration:generate
-```
-
-### Step 5: Apply Migrations
-Run the following command to apply database migrations:
-```sh
-yarn migration:up
-```
-
-### Step 6: Start the Application
-To start the main application, run:
-```sh
-yarn dev
-```
-
-## Notes
-
-- Ensure all environment variables are correctly configured before starting the services.
-- `MINIO_ROOT_PASSWORD` must be at least 8 characters.
-- `RPC` must be set to a valid RPC endpoint.
-- If you encounter any issues with Docker services, try restarting them using:
-  ```sh
-  docker compose down && docker compose --env-file docker.env up -d
-  ```
-- If database migrations fail, check database connectivity and retry migration commands.
+- [`system-design/`](./system-design/)
+- [`onchain-events.md`](./onchain-events.md)
+- [`ADAPTER_GUIDE.md`](./ADAPTER_GUIDE.md)
+- [`cre-export-api.md`](./cre-export-api.md)
