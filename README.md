@@ -1,4 +1,4 @@
-# PolkaTap Backend
+# PolkaTap on Polkadot Hub
 
 Backend service for PolkaTap, a real-time price-grid betting platform integrated with the Polkadot Hub blockchain.
 
