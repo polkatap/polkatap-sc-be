@@ -1,6 +1,6 @@
 # PolkaTap on Polkadot Hub
 
-Backend service for PolkaTap, a real-time price-grid betting platform integrated with the Polkadot Hub blockchain.
+PolkaTap, a real-time price-grid betting platform integrated with the Polkadot Hub blockchain.
 
 This repository contains the offchain services that power pricing, grid generation, order execution, balance accounting, payment orchestration, and realtime delivery to clients. The onchain custody boundary is intentionally narrow and currently centered on [`smart-contracts/Vault.sol`](./smart-contracts/Vault.sol).
 
